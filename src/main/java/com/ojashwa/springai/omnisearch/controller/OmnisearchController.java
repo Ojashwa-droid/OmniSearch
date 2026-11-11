@@ -36,6 +36,8 @@ public class OmnisearchController {
     public ResponseEntity<FollowUpResponse> getFollowUps(@RequestBody FollowUpRequest request) {
         FollowUpResponse followUpResponse = followUpAgent.generateFollowUps(request.originalQuery(), request.answer());
 
+        log.info("Generated follow up questions: {}", followUpResponse.followUpQuestions());
+
         return ResponseEntity.ok(followUpResponse);
     }
 

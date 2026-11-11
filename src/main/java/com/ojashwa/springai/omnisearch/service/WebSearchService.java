@@ -22,12 +22,13 @@ public class WebSearchService {
 
     public WebSearchService(
             WebClient.Builder webClientBuilder,
-            @Value("${omnisearch.tavily.api-url:https://api.tavily.com/search}") String tavilyApiUrl
+            @Value("${omnisearch.tavily.api-url:https://api.tavily.com/search}") String tavilyApiUrl,
+            @Value("${omnisearch.tavily.api-key}") String tavilyApiKey
     ) {
         this.webClient = webClientBuilder
                 .baseUrl(tavilyApiUrl)
                 .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
-                .defaultHeader("X-Tavily-Access-Mode", "keyless")
+                .defaultHeader("Authorization", "Bearer " + tavilyApiKey)
                 .build();
     }
 

@@ -13,7 +13,6 @@ const stopBtn = document.getElementById('stop-btn');
 const thread = document.getElementById('thread');
 const home = document.getElementById('home');
 const sessionSourcesToggle = document.getElementById('session-sources-toggle');
-const sessionSourcesToolbar = document.getElementById('session-sources-toolbar');
 const sessionSourcesCount = document.getElementById('session-sources-count');
 const sessionSourcesPanel = document.getElementById('session-sources-panel');
 const sessionSourcesClose = document.getElementById('session-sources-close');
@@ -497,7 +496,6 @@ function renderSessionSources() {
     });
 
     const entries = [...uniqueSources.values()];
-    if (sessionSourcesToolbar) sessionSourcesToolbar.hidden = entries.length === 0;
     sessionSourcesToggle.hidden = entries.length === 0;
     sessionSourcesCount.textContent = String(entries.length);
     sessionSourcesToggle.setAttribute('aria-label', `View ${entries.length} unique sources used in this chat`);
