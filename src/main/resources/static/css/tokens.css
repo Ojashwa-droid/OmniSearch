@@ -1,0 +1,95 @@
+:root {
+  --space-3xs: 2px;
+  --space-2xs: 4px;
+  --space-xs: 8px;
+  --space-sm: 12px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 40px;
+  --space-2xl: 64px;
+  --space-3xl: 96px;
+  --space-4xl: 144px;
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-md: 1rem;
+  --text-lg: 1.2rem;
+  --text-xl: 1.44rem;
+  --text-2xl: 1.728rem;
+  --text-3xl: 2.074rem;
+  --text-display-s: 2.5rem;
+  --text-display: 3.25rem;
+  --text-section: 1.5rem;
+  --text-title: 1.25rem;
+  --text-lead: 1.125rem;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in: cubic-bezier(0.7, 0, 0.84, 0);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-micro: 120ms;
+  --dur-short: 220ms;
+  --dur-long: 420ms;
+
+  --color-paper: #f3eee4;
+  --color-paper-2: #faf6ee;
+  --color-paper-3: #fffdf8;
+  --color-ink: #1c1915;
+  --color-ink-2: #5c564c;
+  --color-muted: #746d62;
+  --color-rule: #d6cfc2;
+  --color-rule-strong: #c4bbab;
+  --color-accent: #b42318;
+  --color-accent-ink: #fffdf8;
+  --color-accent-deep: #8f1c14;
+  --color-accent-wash: #f4e4e1;
+  --color-accent-border: #e3c4bf;
+  --color-accent-hover: #ead4d0;
+  --color-focus: #8f1c14;
+  --color-error: #b42318;
+  --color-evidence: #e9eee6;
+  --color-evidence-edge: #9bad9a;
+  --color-overlay: rgba(28, 25, 21, 0.24);
+  --shadow-sidebar: 8px 0 28px rgba(28, 25, 21, 0.12);
+  --shadow-panel: 0 10px 32px rgba(28, 25, 21, 0.14);
+
+  --font-display: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-outlier: var(--font-body);
+
+  --radius-card: 2px;
+  --radius-pill: 999px;
+  --rule-hair: 1px;
+  --shadow-card: none;
+  --tracking-display: -0.035em;
+  --container: 1280px;
+  --gutter: 48px;
+  --gap-columns: 32px;
+
+  --paper: var(--color-paper);
+  --paper-raised: var(--color-paper-2);
+  --clip: var(--color-paper-3);
+  --ink: var(--color-ink);
+  --ink-2: var(--color-ink-2);
+  --ink-3: var(--color-muted);
+  --rule: var(--color-rule);
+  --rule-strong: var(--color-rule-strong);
+  --spike: var(--color-accent);
+  --spike-ink: var(--color-accent-deep);
+  --spike-wash: var(--color-accent-wash);
+  --danger: var(--color-error);
+  --font-ui: var(--font-body);
+  --font-mono: var(--font-body);
+  --font-article: var(--font-display);
+  --ease: var(--ease-out);
+  --content-w: 960px;
+  --article-w: 800px;
+  --composer-w: 864px;
+  --mast-h: 60px;
+  --composer-h: 132px;
+}
+
+@media (max-width: 60rem) {
+  :root { --gutter: 32px; --content-w: 100%; --article-w: 100%; }
+}
+
+@media (max-width: 40rem) {
+  :root { --gutter: 20px; --gap-columns: 16px; --composer-h: 128px; }
+}

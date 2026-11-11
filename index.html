@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OmniSearch</title>
+    <meta name="description" content="OmniSearch: streaming AI answers with cited web sources.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/css/omnisearch.css?v=20">
+</head>
+<body class="is-home">
+
+<header class="masthead">
+    <div class="masthead-brand">
+        <button id="chat-sidebar-toggle" class="chat-sidebar-toggle" type="button" aria-controls="chat-sidebar" aria-expanded="false" aria-label="Open chat history" title="Chat history">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+        </button>
+        <a href="/" class="wordmark" aria-label="OmniSearch home">
+            <img class="brand-mark" src="/images/cybernetics-robotics-construction-svgrepo-com.svg" width="28" height="28" alt="" aria-hidden="true">
+            <span>OmniSearch</span>
+        </a>
+    </div>
+    <div class="masthead-tools">
+        <p class="desk-status">Desk</p>
+        <p class="desk-model">Gemini flash-lite</p>
+        <button id="session-sources-toggle" class="session-sources-toggle" type="button" aria-controls="session-sources-panel" aria-expanded="false" hidden>
+            <span>Sources</span>
+            <span id="session-sources-count" class="session-sources-count">0</span>
+            <span class="session-sources-chevron" aria-hidden="true">⌄</span>
+        </button>
+    </div>
+</header>
+
+<div id="chat-sidebar-backdrop" class="chat-sidebar-backdrop" hidden></div>
+<aside id="chat-sidebar" class="chat-sidebar" aria-label="Chat history" aria-hidden="true" inert>
+    <div class="chat-sidebar-head">
+        <h2>Your chats</h2>
+        <button id="chat-sidebar-close" class="session-sources-close" type="button" aria-label="Close chat history">×</button>
+    </div>
+    <button id="new-chat-btn" class="new-chat-btn" type="button">
+        <span aria-hidden="true">＋</span> New chat
+    </button>
+    <p id="chat-storage-notice" class="chat-storage-notice" role="status" hidden></p>
+    <p class="chat-history-label">History</p>
+    <div id="chat-history-list" class="chat-history-list"></div>
+</aside>
+
+<aside id="session-sources-panel" class="session-sources-panel" aria-label="Sources in this chat" hidden>
+    <div class="session-sources-panel-head">
+        <div>
+            <h2>Sources in this chat</h2>
+            <p id="session-sources-summary" class="session-sources-summary"></p>
+        </div>
+        <button id="session-sources-close" class="session-sources-close" type="button" aria-label="Close sources">×</button>
+    </div>
+    <div id="session-sources-list" class="session-sources-list" aria-live="polite"></div>
+</aside>
+
+<main id="page">
+    <section id="home" aria-label="File a question">
+        <div class="home-layout">
+            <div class="home-intro">
+                <h1 class="home-title">Research the web.<br>Understand what matters.</h1>
+                <p class="home-lede">What do you want to know?</p>
+            </div>
+            <section class="home-query-index" aria-labelledby="home-index-title">
+                <h2 id="home-index-title" class="home-index-title">Wire desk</h2>
+                <div class="wires" role="group" aria-label="Suggested searches">
+                    <button class="wire" type="button">What is Spring AI?</button>
+                    <button class="wire" type="button">How does RAG work?</button>
+                    <button class="wire" type="button">Explain quantum computing</button>
+                    <button class="wire" type="button">Latest AI breakthroughs 2026</button>
+                    <button class="wire" type="button">What is Gemini Flash?</button>
+                </div>
+            </section>
+        </div>
+    </section>
+    <div id="thread" hidden></div>
+</main>
+
+<div id="composer" role="search">
+    <div id="attachment-tray" class="attachment-tray" aria-label="Selected attachments" aria-live="polite" hidden></div>
+    <p id="attachment-notice" class="attachment-notice" role="status" hidden></p>
+    <form id="search-form" novalidate>
+        <label class="sr-only" for="query-input">Question</label>
+        <button type="button" id="attachment-picker-btn" class="attachment-picker-btn" title="Add images or documents" aria-label="Add images or documents" aria-describedby="attachment-help">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8.5 12.5 6.1-6.1a3.2 3.2 0 0 1 4.5 4.5l-8.2 8.2a5 5 0 0 1-7.1-7.1l8.2-8.2"/><path d="m7.8 14.2 7.1-7.1"/></svg>
+        </button>
+        <input id="attachment-file-input" class="sr-only" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.jpg,.jpeg,.png,.webp,.heic,.heif,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.md,.markdown,.html,.htm,.csv" multiple aria-label="Choose images or documents">
+        <textarea
+                id="query-input"
+                placeholder="Ask anything…"
+                autocomplete="off"
+                spellcheck="true"
+                rows="1"
+        ></textarea>
+        <button type="button" id="stop-btn" hidden title="Stop" aria-label="Stop generating">
+            <span class="stop-square" aria-hidden="true"></span>
+        </button>
+        <button type="submit" id="send-btn" title="Send" aria-label="Send query">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="square" aria-hidden="true">
+                <path d="M12 19V5M5 12l7-7 7 7"/>
+            </svg>
+        </button>
+    </form>
+    <p class="composer-hint"><span id="attachment-help">Images and documents, up to five files</span><span>Enter to send</span><span>Shift+Enter for a new line</span></p>
+</div>
+
+<script src="/js/marked.min.js?v=1"></script>
+<script src="/js/omnisearch.js?v=18"></script>
+</body>
+</html>

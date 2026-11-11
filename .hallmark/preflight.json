@@ -1,0 +1,12 @@
+{
+  "scanned": "2026-11-12",
+  "findings": {
+    "fonts": "IBM Plex Sans in src/main/resources/static/index.html:10 and css/omnisearch.css:16-18",
+    "palette": "OmniSearch paper, ink, rule, and red tokens in src/main/resources/static/css/omnisearch.css:3-14",
+    "motion": "Vanilla CSS keyframes and transitions in src/main/resources/static/css/omnisearch.css:528-661, reduced-motion rule at 975",
+    "spacing": "Vanilla CSS spacing declarations; no utility framework",
+    "framework": "Spring Boot static frontend, src/main/resources/static/index.html with css/omnisearch.css and js/omnisearch.js; no frontend build system"
+  },
+  "preserve": ["OmniSearch brand mark", "IBM Plex Sans", "paper/ink/red palette", "newsletter/newsroom identity", "existing conversation and source workflows"],
+  "introduce": ["asymmetric home research desk", "broader editorial answer workspace", "tokenized visual roles and accessible interaction states"]
+}

@@ -25,6 +25,35 @@ const chatSidebarClose = document.getElementById('chat-sidebar-close');
 const newChatButton = document.getElementById('new-chat-btn');
 const chatHistoryList = document.getElementById('chat-history-list');
 const chatStorageNotice = document.getElementById('chat-storage-notice');
+const attachmentPickerButton = document.getElementById('attachment-picker-btn');
+const microphoneButton = document.getElementById('microphone-btn');
+const attachmentFileInput = document.getElementById('attachment-file-input');
+const attachmentTray = document.getElementById('attachment-tray');
+const attachmentNotice = document.getElementById('attachment-notice');
+const composer = document.getElementById('composer');
+const voiceWaveform = document.getElementById('voice-waveform');
+const MAX_ATTACHMENT_COUNT = 5;
+const MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024;
+const MAX_TOTAL_ATTACHMENT_BYTES = 40 * 1024 * 1024;
+const DOCUMENT_EXTENSIONS = new Set(['pdf', 'doc', 'docx', 'ppt', 'pptx', 'xls', 'xlsx', 'txt', 'md', 'markdown', 'html', 'htm', 'csv']);
+const IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif']);
+const IMAGE_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'webp', 'heic', 'heif']);
+const AUDIO_TYPES = new Set(['audio/flac', 'audio/x-flac', 'audio/mpeg', 'audio/mp3', 'audio/mp4', 'audio/x-m4a', 'audio/ogg', 'audio/wav', 'audio/x-wav', 'audio/wave', 'audio/webm']);
+const AUDIO_EXTENSIONS = new Set(['flac', 'mp3', 'mp4', 'mpeg', 'mpga', 'm4a', 'ogg', 'wav', 'webm']);
+let selectedAttachments = [];
+let mediaRecorder = null;
+let microphoneStream = null;
+let recordingChunks = [];
+let recordingBytes = 0;
+let recordingStartedAt = 0;
+let recordingTimer = null;
+let recordingDiscard = false;
+let recordingLimitHit = false;
+let microphoneRequestPending = false;
+let microphoneRequestId = 0;
+let voiceAudioContext = null;
+let voiceAnimationFrame = 0;
+let recordingSignalDetected = false;
 
 let abortController = null;
 let isStreaming = false;
@@ -127,7 +156,10 @@ function normaliseChatRecord(chat) {
                 .map((source) => ({ sourceNumber: source.sourceNumber, url: safeHttpUrl(source.url), title: String(source.title || '') })) : [],
             status: turn?.status === 'streaming' ? 'interrupted' : String(turn?.status || 'completed'),
             errorMessage: String(turn?.errorMessage || ''),
-            followUps: Array.isArray(turn?.followUps) ? turn.followUps.map(String) : []
+            followUps: Array.isArray(turn?.followUps) ? turn.followUps.map(String) : [],
+            attachments: Array.isArray(turn?.attachments) ? turn.attachments
+                .filter((file) => file && ['image', 'document', 'audio'].includes(file.kind))
+                .map((file) => ({ name: String(file.name || 'Attachment').slice(0, 240), kind: file.kind, mediaType: String(file.mediaType || ''), size: Math.max(0, Number(file.size) || 0) })) : []
         }))
     };
 }
@@ -156,6 +188,393 @@ function readLegacySources(conversationId) {
 function createBlankChat(id = createId()) {
     const now = Date.now();
     return { id, title: 'New chat', createdAt: now, updatedAt: now, turns: [] };
+}
+
+function extensionOf(fileName) {
+    return String(fileName || '').split('.').pop().toLowerCase();
+}
+
+function attachmentKind(file) {
+    const type = String(file.type || '').toLowerCase().split(';', 1)[0].trim();
+    const extension = extensionOf(file.name);
+    if (AUDIO_TYPES.has(type) || (type === 'video/mp4' && extension === 'mp4') || (type === 'video/webm' && extension === 'webm')) return 'audio';
+    if (type.startsWith('audio/') || type.startsWith('video/')) return null;
+    if (IMAGE_TYPES.has(type)) return 'image';
+    if (type.startsWith('image/')) return null;
+    const genericType = !type || type === 'application/octet-stream' || type === 'application/unknown';
+    if (AUDIO_EXTENSIONS.has(extension) && genericType) return 'audio';
+    if (IMAGE_EXTENSIONS.has(extension) && genericType) return 'image';
+    if (DOCUMENT_EXTENSIONS.has(extension) && (genericType || type.startsWith('application/') || type.startsWith('text/'))) return 'document';
+    return null;
+}
+
+function formatFileSize(size) {
+    if (size < 1024 * 1024) return `${Math.max(1, Math.round(size / 1024))} KiB`;
+    return `${(size / (1024 * 1024)).toFixed(1)} MiB`;
+}
+
+function setAttachmentNotice(message, state = 'info') {
+    attachmentNotice.textContent = message;
+    attachmentNotice.dataset.state = state;
+    attachmentNotice.hidden = !message;
+    attachmentFileInput.toggleAttribute('aria-invalid', state === 'error');
+    attachmentPickerButton.toggleAttribute('aria-invalid', state === 'error');
+    syncComposerClearance();
+}
+
+function syncComposerClearance() {
+    window.requestAnimationFrame(() => {
+        const height = Math.ceil(composer.getBoundingClientRect().height);
+        document.documentElement.style.setProperty('--composer-h', `${height}px`);
+    });
+}
+
+function revokeAttachmentPreviews(files = selectedAttachments) {
+    files.forEach((attachment) => {
+        if (attachment.previewUrl) URL.revokeObjectURL(attachment.previewUrl);
+    });
+}
+
+function renderAttachmentTray() {
+    attachmentTray.replaceChildren();
+    attachmentTray.hidden = selectedAttachments.length === 0;
+    selectedAttachments.forEach((attachment, index) => {
+        const item = document.createElement('div');
+        item.className = 'attachment-chip';
+        const preview = document.createElement(attachment.kind === 'image' && attachment.previewUrl ? 'img' : 'span');
+        if (attachment.kind === 'image' && attachment.previewUrl) {
+            preview.className = 'attachment-chip-preview';
+            preview.src = attachment.previewUrl;
+            preview.alt = '';
+        } else {
+            preview.className = 'attachment-chip-kind';
+            preview.textContent = attachment.kind === 'audio' ? 'Audio' : attachment.kind === 'image' ? 'Image' : extensionOf(attachment.file.name).slice(0, 4).toLowerCase();
+            preview.setAttribute('aria-hidden', 'true');
+        }
+        const details = document.createElement('span');
+        details.className = 'attachment-chip-details';
+        const name = document.createElement('span');
+        name.className = 'attachment-chip-name';
+        name.textContent = attachment.file.name;
+        const size = document.createElement('span');
+        size.className = 'attachment-chip-size';
+        size.textContent = formatFileSize(attachment.file.size);
+        details.append(name, size);
+        const remove = document.createElement('button');
+        remove.type = 'button';
+        remove.className = 'attachment-remove';
+        remove.setAttribute('aria-label', `Remove ${attachment.file.name}`);
+        remove.textContent = '×';
+        remove.addEventListener('click', () => removeSelectedAttachment(index));
+        if (attachment.kind === 'audio') {
+            item.classList.add('attachment-chip-audio');
+            const player = document.createElement('audio');
+            player.className = 'attachment-audio-preview';
+            player.controls = true;
+            player.preload = 'auto';
+            player.src = attachment.previewUrl;
+            player.setAttribute('aria-label', `Preview ${attachment.file.name}`);
+            player.addEventListener('error', () => {
+                setAttachmentNotice(`This browser could not play ${attachment.file.name}. You can still send the audio file.`, 'error');
+            }, { once: true });
+            player.load();
+            item.append(preview, details, remove, player);
+        } else {
+            item.append(preview, details, remove);
+        }
+        attachmentTray.appendChild(item);
+    });
+    syncComposerClearance();
+}
+
+function removeSelectedAttachment(index) {
+    const [removed] = selectedAttachments.splice(index, 1);
+    if (removed?.previewUrl) URL.revokeObjectURL(removed.previewUrl);
+    renderAttachmentTray();
+    setAttachmentNotice(selectedAttachments.length ? `${selectedAttachments.length} ${selectedAttachments.length === 1 ? 'file is' : 'files are'} ready.` : '');
+}
+
+function clearSelectedAttachments() {
+    revokeAttachmentPreviews();
+    selectedAttachments = [];
+    renderAttachmentTray();
+    attachmentFileInput.value = '';
+}
+
+function recordingMimeType() {
+    if (!window.MediaRecorder?.isTypeSupported) return '';
+    return ['audio/webm;codecs=opus', 'audio/ogg;codecs=opus', 'audio/mp4'].find((type) => MediaRecorder.isTypeSupported(type)) || '';
+}
+
+function formatRecordingTime(milliseconds) {
+    const totalSeconds = Math.floor(milliseconds / 1000);
+    return `${String(Math.floor(totalSeconds / 60)).padStart(2, '0')}:${String(totalSeconds % 60).padStart(2, '0')}`;
+}
+
+function updateRecordingNotice() {
+    setAttachmentNotice(`Recording ${formatRecordingTime(Date.now() - recordingStartedAt)} · press the microphone to finish.`);
+}
+
+function resetMicrophoneButton() {
+    microphoneButton.setAttribute('aria-pressed', 'false');
+    microphoneButton.setAttribute('aria-label', 'Start voice input');
+    microphoneButton.title = 'Start voice input';
+    microphoneButton.removeAttribute('aria-busy');
+    microphoneButton.classList.remove('is-recording');
+}
+
+function releaseMicrophone() {
+    if (recordingTimer) window.clearInterval(recordingTimer);
+    recordingTimer = null;
+    microphoneStream?.getTracks().forEach((track) => track.stop());
+    microphoneStream = null;
+    stopVoiceVisualization();
+    mediaRecorder = null;
+    microphoneRequestPending = false;
+    resetMicrophoneButton();
+    if (!isStreaming) microphoneButton.disabled = false;
+    if (!isStreaming) {
+        attachmentPickerButton.disabled = false;
+        attachmentFileInput.disabled = false;
+    }
+}
+
+function stopVoiceVisualization() {
+    if (voiceAnimationFrame) window.cancelAnimationFrame(voiceAnimationFrame);
+    voiceAnimationFrame = 0;
+    voiceWaveform.hidden = true;
+    voiceWaveform.replaceChildren();
+    form.classList.remove('is-recording');
+    input.disabled = isStreaming;
+    const context = voiceAudioContext;
+    voiceAudioContext = null;
+    if (context && context.state !== 'closed') context.close().catch(() => {});
+}
+
+function startVoiceVisualization(stream) {
+    const bars = Array.from({ length: 24 }, (_, index) => {
+        const bar = document.createElement('span');
+        bar.className = 'voice-waveform-bar';
+        bar.style.setProperty('--bar-index', index);
+        return bar;
+    });
+    voiceWaveform.replaceChildren(...bars);
+    voiceWaveform.hidden = false;
+    form.classList.add('is-recording');
+    input.disabled = true;
+
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    let analyser = null;
+    let timeDomain = null;
+    try {
+        if (AudioContextClass) {
+            voiceAudioContext = new AudioContextClass();
+            analyser = voiceAudioContext.createAnalyser();
+            analyser.fftSize = 256;
+            voiceAudioContext.createMediaStreamSource(stream).connect(analyser);
+            timeDomain = new Uint8Array(analyser.fftSize);
+            voiceAudioContext.resume().catch(() => {});
+        }
+    } catch {
+        voiceAudioContext?.close().catch(() => {});
+        voiceAudioContext = null;
+    }
+    const draw = (time = performance.now()) => {
+        let totalRms = 0;
+        if (analyser && timeDomain) {
+            analyser.getByteTimeDomainData(timeDomain);
+            for (let index = 0; index < timeDomain.length; index += 1) {
+                const sample = (timeDomain[index] - 128) / 128;
+                totalRms += sample * sample;
+            }
+            totalRms = Math.sqrt(totalRms / timeDomain.length);
+            if (totalRms > 0.018) recordingSignalDetected = true;
+        }
+        bars.forEach((bar, index) => {
+            const first = Math.floor((index / bars.length) * (timeDomain?.length || bars.length));
+            const last = Math.max(first + 1, Math.floor(((index + 1) / bars.length) * (timeDomain?.length || bars.length)));
+            let localRms = totalRms;
+            if (timeDomain) {
+                let bucketPower = 0;
+                for (let sampleIndex = first; sampleIndex < Math.min(last, timeDomain.length); sampleIndex += 1) {
+                    const sample = (timeDomain[sampleIndex] - 128) / 128;
+                    bucketPower += sample * sample;
+                }
+                localRms = Math.sqrt(bucketPower / Math.max(1, last - first));
+            }
+            const motion = (Math.sin(time / 180 + index * 0.58) + 1) * 0.2;
+            const level = Math.min(1, 0.36 + motion + localRms * 3.5);
+            bar.style.setProperty('--bar-level', String(level));
+        });
+        voiceAnimationFrame = window.requestAnimationFrame(draw);
+    };
+    draw();
+}
+
+function stopRecording({ discard = false } = {}) {
+    if (discard) {
+        recordingDiscard = true;
+        microphoneRequestId += 1;
+    }
+    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+        mediaRecorder.stop();
+        microphoneButton.setAttribute('aria-label', 'Finishing recording');
+        microphoneButton.title = 'Finishing recording';
+        return;
+    }
+    releaseMicrophone();
+}
+
+async function startRecording() {
+    if (selectedAttachments.length >= MAX_ATTACHMENT_COUNT) {
+        setAttachmentNotice(`Choose no more than ${MAX_ATTACHMENT_COUNT} files per question. Remove a file before recording.`, 'error');
+        return;
+    }
+    if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
+        setAttachmentNotice('Voice recording is not supported by this browser. You can still attach an audio file.', 'error');
+        return;
+    }
+    if (!window.isSecureContext) {
+        setAttachmentNotice('Voice recording requires a secure page (HTTPS or localhost).', 'error');
+        return;
+    }
+
+    const requestId = ++microphoneRequestId;
+    microphoneRequestPending = true;
+    microphoneButton.disabled = true;
+    microphoneButton.setAttribute('aria-busy', 'true');
+    setAttachmentNotice('Requesting microphone access…');
+    try {
+        microphoneStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        if (requestId !== microphoneRequestId) {
+            releaseMicrophone();
+            return;
+        }
+        const mimeType = recordingMimeType();
+        mediaRecorder = new MediaRecorder(microphoneStream, mimeType ? { mimeType } : undefined);
+        recordingChunks = [];
+        recordingBytes = 0;
+        recordingDiscard = false;
+        recordingLimitHit = false;
+        recordingSignalDetected = false;
+        recordingStartedAt = Date.now();
+        mediaRecorder.addEventListener('dataavailable', (event) => {
+            if (!event.data?.size) return;
+            recordingChunks.push(event.data);
+            recordingBytes += event.data.size;
+            const selectedBytes = selectedAttachments.reduce((total, attachment) => total + attachment.file.size, 0);
+            if (recordingBytes > MAX_ATTACHMENT_BYTES || selectedBytes + recordingBytes > MAX_TOTAL_ATTACHMENT_BYTES) {
+                recordingLimitHit = true;
+                stopRecording();
+            }
+        });
+        mediaRecorder.addEventListener('stop', () => {
+            const chunks = recordingChunks;
+            const discard = recordingDiscard;
+            const limitHit = recordingLimitHit;
+            const recordedType = mediaRecorder?.mimeType || chunks.find((chunk) => chunk.type)?.type || 'audio/webm';
+            releaseMicrophone();
+            recordingChunks = [];
+            recordingBytes = 0;
+            if (discard) return;
+            if (limitHit) {
+                setAttachmentNotice('Recording reached the upload size limit. Try a shorter recording or remove another file.', 'error');
+                return;
+            }
+            const blob = new Blob(chunks, { type: recordedType });
+            if (!blob.size) {
+                setAttachmentNotice('No audio was captured. Check your microphone and try again.', 'error');
+                return;
+            }
+            const extension = recordedType.includes('ogg') ? 'ogg' : recordedType.includes('mp4') ? 'mp4' : 'webm';
+            const file = new File([blob], `voice-note-${new Date().toISOString().replace(/[:.]/g, '-')}.${extension}`, { type: recordedType });
+            selectedAttachments.push({ file, kind: 'audio', previewUrl: URL.createObjectURL(file) });
+            renderAttachmentTray();
+            setAttachmentNotice(
+                recordingSignalDetected
+                    ? 'Voice note ready to send.'
+                    : 'Voice note saved, but little or no microphone signal was detected. Check your microphone before sending.',
+                recordingSignalDetected ? 'success' : 'error'
+            );
+        }, { once: true });
+        mediaRecorder.addEventListener('error', () => {
+            setAttachmentNotice('The browser could not record audio. Check microphone access and try again.', 'error');
+            stopRecording({ discard: true });
+        }, { once: true });
+        mediaRecorder.start(1000);
+        microphoneRequestPending = false;
+        microphoneButton.disabled = false;
+        microphoneButton.removeAttribute('aria-busy');
+        attachmentPickerButton.disabled = true;
+        attachmentFileInput.disabled = true;
+        microphoneButton.setAttribute('aria-pressed', 'true');
+        microphoneButton.setAttribute('aria-label', 'Stop recording');
+        microphoneButton.title = 'Stop recording';
+        microphoneButton.classList.add('is-recording');
+        startVoiceVisualization(microphoneStream);
+        updateRecordingNotice();
+        recordingTimer = window.setInterval(updateRecordingNotice, 1000);
+    } catch (error) {
+        if (requestId !== microphoneRequestId) return;
+        releaseMicrophone();
+        microphoneButton.disabled = false;
+        const message = error?.name === 'NotAllowedError' || error?.name === 'PermissionDeniedError'
+            ? 'Microphone access was denied. Allow microphone access in your browser, or attach an audio file instead.'
+            : error?.name === 'NotFoundError'
+                ? 'No microphone was found. Connect or enable a microphone, then try again.'
+                : error?.name === 'NotReadableError' || error?.name === 'AbortError'
+                    ? 'The microphone could not be opened. Check system input settings and close other apps using it.'
+                    : error?.name === 'SecurityError'
+                        ? 'Microphone access is blocked for this page. Use HTTPS or localhost and allow access in your browser.'
+                        : 'Could not start recording. Check microphone access and try again.';
+        setAttachmentNotice(message, 'error');
+    }
+}
+
+function toggleRecording() {
+    if (microphoneRequestPending) return;
+    if (mediaRecorder && mediaRecorder.state !== 'inactive') stopRecording();
+    else startRecording();
+}
+
+function addSelectedFiles(fileList) {
+    const files = Array.from(fileList || []);
+    if (!files.length) return;
+    if (selectedAttachments.length + files.length > MAX_ATTACHMENT_COUNT) {
+        setAttachmentNotice(`Choose no more than ${MAX_ATTACHMENT_COUNT} files per question. Remove a file or select fewer.`, 'error');
+        attachmentFileInput.value = '';
+        return;
+    }
+
+    const accepted = [];
+    const errors = [];
+    let totalSize = selectedAttachments.reduce((total, item) => total + item.file.size, 0);
+    files.forEach((file) => {
+        const kind = attachmentKind(file);
+        if (!kind) {
+            errors.push(`${file.name}: unsupported type`);
+            return;
+        }
+        if (file.size <= 0) {
+            errors.push(`${file.name}: file is empty`);
+            return;
+        }
+        if (file.size > MAX_ATTACHMENT_BYTES) {
+            errors.push(`${file.name}: exceeds 20 MiB`);
+            return;
+        }
+        if (totalSize + file.size > MAX_TOTAL_ATTACHMENT_BYTES) {
+            errors.push(`${file.name}: total upload would exceed 40 MiB`);
+            return;
+        }
+        totalSize += file.size;
+        accepted.push({ file, kind, previewUrl: kind === 'document' ? '' : URL.createObjectURL(file) });
+    });
+
+    selectedAttachments.push(...accepted);
+    renderAttachmentTray();
+    setAttachmentNotice(errors.length ? errors.join('. ') : `${selectedAttachments.length} ${selectedAttachments.length === 1 ? 'file is' : 'files are'} ready.`, errors.length ? 'error' : 'success');
+    attachmentFileInput.value = '';
 }
 
 async function initialiseChatHistory() {
@@ -549,6 +968,10 @@ function setStreaming(on) {
     sendBtn.hidden = on;
     stopBtn.hidden = !on;
     input.disabled = on;
+    attachmentPickerButton.disabled = on;
+    microphoneButton.disabled = on;
+    attachmentFileInput.disabled = on;
+    attachmentPickerButton.toggleAttribute('aria-busy', on && selectedAttachments.length > 0);
     if (!on) input.focus();
 }
 
@@ -577,6 +1000,28 @@ function addCopyButton(answer, actions) {
         }
     });
     button.setAttribute('aria-label', 'Copy answer');
+}
+
+function renderTurnAttachments(turn, attachments) {
+    if (!Array.isArray(attachments) || !attachments.length) return;
+    const list = document.createElement('div');
+    list.className = 'turn-attachments';
+    list.setAttribute('role', 'list');
+    list.setAttribute('aria-label', 'Attachments in this question');
+    attachments.forEach((attachment) => {
+        const item = document.createElement('div');
+        item.className = 'turn-attachment';
+        item.setAttribute('role', 'listitem');
+        const kind = document.createElement('span');
+        kind.className = 'turn-attachment-kind';
+        kind.textContent = attachment.kind === 'image' ? 'Image' : attachment.kind === 'audio' ? 'Audio' : 'File';
+        const name = document.createElement('span');
+        name.className = 'turn-attachment-name';
+        name.textContent = attachment.name || 'Attachment';
+        item.append(kind, name);
+        list.appendChild(item);
+    });
+    turn.appendChild(list);
 }
 
 function renderFollowUps(slot, questions) {
@@ -715,8 +1160,9 @@ function createTurnView(record) {
     turn.className = 'turn';
     const headline = document.createElement('h2');
     headline.className = 'user-query';
-    headline.textContent = record.query;
+    headline.textContent = record.query || (record.attachments?.length ? 'Review these attachments' : '');
     turn.appendChild(headline);
+    renderTurnAttachments(turn, record.attachments);
 
     const clippings = document.createElement('div');
     clippings.className = 'clippings';
@@ -840,6 +1286,9 @@ function selectChat(chatId) {
     }
     const selected = chatRecords.find((chat) => chat.id === chatId);
     if (!selected) return;
+    stopRecording({ discard: true });
+    clearSelectedAttachments();
+    setAttachmentNotice('');
     activeChat = selected;
     activeChatId = selected.id;
     writeBrowserValue(ACTIVE_CHAT_KEY, activeChatId);
@@ -855,6 +1304,9 @@ function startNewChat() {
         chatStorageNotice.hidden = false;
         return;
     }
+    stopRecording({ discard: true });
+    clearSelectedAttachments();
+    setAttachmentNotice('');
     activeChat = createBlankChat();
     activeChatId = activeChat.id;
     writeBrowserValue(ACTIVE_CHAT_KEY, activeChatId);
@@ -869,7 +1321,18 @@ function startNewChat() {
 
 async function submitQuery() {
     const query = input.value.trim();
-    if (!query || isStreaming) return;
+    const attachmentsForTurn = selectedAttachments.map((attachment) => attachment.file);
+    if (microphoneRequestPending || (mediaRecorder && mediaRecorder.state !== 'inactive')) {
+        setAttachmentNotice('Stop the recording before sending your question.');
+        return;
+    }
+    if ((!query && !attachmentsForTurn.length) || isStreaming) return;
+    const attachmentMetadata = selectedAttachments.map(({ file, kind }) => ({
+        name: file.name,
+        kind,
+        mediaType: file.type || (kind === 'image' ? 'image/unknown' : kind === 'audio' ? 'audio/unknown' : 'application/octet-stream'),
+        size: file.size
+    }));
 
     if (!activeChat) activeChat = createBlankChat();
     enterThread();
@@ -878,21 +1341,28 @@ async function submitQuery() {
     setStreaming(true);
 
     const turnNumber = getNextSessionTurnNumber();
-    const turnRecord = { query, answerMarkdown: '', sources: [], status: 'streaming', errorMessage: '', followUps: [] };
+    const turnRecord = { query, answerMarkdown: '', sources: [], status: 'streaming', errorMessage: '', followUps: [], attachments: attachmentMetadata };
     activeChat.turns.push(turnRecord);
-    if (activeChat.turns.length === 1) activeChat.title = query;
+    if (activeChat.turns.length === 1) activeChat.title = query || attachmentMetadata[0]?.name || 'Uploaded attachments';
     activeChat.updatedAt = Date.now();
     const chatForTurn = activeChat;
     await persistActiveChatNow();
 
     const turn = createTurnView(turnRecord);
+    clearSelectedAttachments();
+    setAttachmentNotice('');
     const clippings = turn.querySelector('.clippings');
     const answer = turn.querySelector('.answer-body');
     const actions = turn.querySelector('.answer-actions');
     const followupSlot = turn.lastElementChild;
     const searching = document.createElement('div');
     searching.className = 'searching';
-    searching.innerHTML = '<span class="searching-dash" aria-hidden="true">—</span> Searching the wire…';
+    const hasAudioAttachment = attachmentMetadata.some((attachment) => attachment.kind === 'audio');
+    const hasOtherAttachment = attachmentMetadata.some((attachment) => attachment.kind !== 'audio');
+    const processingLabel = hasAudioAttachment
+        ? (hasOtherAttachment ? 'Transcribing audio and reading attachments…' : 'Transcribing audio…')
+        : (attachmentsForTurn.length ? 'Reading attachments and searching the wire…' : 'Searching the wire…');
+    searching.innerHTML = `<span class="searching-dash" aria-hidden="true">—</span> ${processingLabel}`;
     answer.replaceChildren(searching);
     thread.appendChild(turn);
     turn.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -902,13 +1372,32 @@ async function submitQuery() {
     let stopped = false;
     let requestError = false;
     try {
-        const response = await fetch(`${API_BASE}/conversation/stream`, {
+        const requestUrl = attachmentsForTurn.length
+            ? `${API_BASE}/conversation/stream/multimodal`
+            : `${API_BASE}/conversation/stream`;
+        const requestOptions = {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Accept': 'text/event-stream' },
-            body: JSON.stringify({ query, conversationId: chatForTurn.id }),
+            headers: { 'Accept': 'text/event-stream' },
             signal: abortController.signal
-        });
-        if (!response.ok) throw new Error(`Search failed (${response.status}). Please try again.`);
+        };
+        if (attachmentsForTurn.length) {
+            const payload = new FormData();
+            payload.append('query', query);
+            payload.append('conversationId', chatForTurn.id);
+            attachmentsForTurn.forEach((file) => payload.append('attachments', file, file.name));
+            requestOptions.body = payload;
+        } else {
+            requestOptions.headers['Content-Type'] = 'application/json';
+            requestOptions.body = JSON.stringify({ query, conversationId: chatForTurn.id });
+        }
+        const response = await fetch(requestUrl, requestOptions);
+        if (!response.ok) {
+            if (attachmentsForTurn.length && response.status === 404) {
+                throw new Error('The server does not have the multimodal upload endpoint yet. Your selected files are back in the composer; text-only search is still available.');
+            }
+            if (response.status === 413) throw new Error('The server rejected this upload because it is too large. Reduce the file sizes and try again.');
+            throw new Error(`Search failed (${response.status}). Please try again.`);
+        }
         await readEventStream(response, state);
     } catch (error) {
         stopped = error.name === 'AbortError';
@@ -930,6 +1419,15 @@ async function submitQuery() {
     } finally {
         abortController = null;
         setStreaming(false);
+        if (requestError && attachmentsForTurn.length) {
+            selectedAttachments = attachmentsForTurn.map((file, index) => ({
+                file,
+                kind: attachmentMetadata[index].kind,
+                previewUrl: attachmentMetadata[index].kind === 'document' ? '' : URL.createObjectURL(file)
+            }));
+            renderAttachmentTray();
+            setAttachmentNotice('The upload did not reach the server. Your files are ready to retry.', 'error');
+        }
     }
 
     if (!state.rawAnswer.trim()) {
@@ -968,12 +1466,28 @@ async function submitQuery() {
     addCopyButton(state.rawAnswer, actions);
     activeChat.updatedAt = Date.now();
     await persistActiveChatNow();
-    if (!stopped) loadFollowUps(query, state.rawAnswer, followupSlot, turnRecord, chatForTurn);
+    if (!stopped && query) loadFollowUps(query, state.rawAnswer, followupSlot, turnRecord, chatForTurn);
 }
 
 input.addEventListener('input', () => {
     input.style.height = 'auto';
     input.style.height = `${Math.min(input.scrollHeight, 160)}px`;
+});
+
+input.addEventListener('paste', (event) => {
+    const clipboard = event.clipboardData;
+    if (!clipboard) return;
+    const itemFiles = Array.from(clipboard.items || [])
+        .filter((item) => item.kind === 'file')
+        .map((item) => item.getAsFile())
+        .filter(Boolean);
+    const files = [...itemFiles, ...Array.from(clipboard.files || [])];
+    const uniqueFiles = files.filter((file, index, all) =>
+        all.findIndex((candidate) => candidate.name === file.name && candidate.size === file.size && candidate.type === file.type) === index
+    );
+    if (!uniqueFiles.length) return;
+    addSelectedFiles(uniqueFiles);
+    if (!clipboard.getData('text/plain').trim()) event.preventDefault();
 });
 
 input.addEventListener('keydown', (event) => {
@@ -982,6 +1496,14 @@ input.addEventListener('keydown', (event) => {
         submitQuery();
     }
 });
+
+attachmentPickerButton.addEventListener('click', () => {
+    if (!attachmentPickerButton.disabled) attachmentFileInput.click();
+});
+
+microphoneButton.addEventListener('click', toggleRecording);
+
+attachmentFileInput.addEventListener('change', () => addSelectedFiles(attachmentFileInput.files));
 
 document.querySelectorAll('.wire').forEach((button) => {
     button.addEventListener('click', () => {
@@ -1034,4 +1556,6 @@ document.addEventListener('keydown', (event) => {
     }
 });
 
+window.addEventListener('resize', syncComposerClearance, { passive: true });
+syncComposerClearance();
 initialiseChatHistory();

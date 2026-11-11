@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OmniSearch audio attachment states</title>
+    <meta name="description" content="Audio attachment controls for the OmniSearch research composer.">
+    <link rel="stylesheet" href="../src/main/resources/static/css/omnisearch.css">
+</head>
+<body>
+<main class="hallmark-component-preview">
+    <section class="hallmark-component-state">
+        <div><h2>Ready</h2><p>Add an audio file</p></div>
+        <button class="attachment-picker-btn" type="button" aria-label="Add audio file"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8.5 12.5 6.1-6.1a3.2 3.2 0 0 1 4.5 4.5l-8.2 8.2a5 5 0 0 1-7.1-7.1l8.2-8.2"/><path d="m7.8 14.2 7.1-7.1"/></svg></button>
+    </section>
+    <section class="hallmark-component-state">
+        <div><h2>Hover</h2><p>Pointer over the control</p></div>
+        <button class="attachment-picker-btn is-hover" type="button" aria-label="Add audio file"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8.5 12.5 6.1-6.1a3.2 3.2 0 0 1 4.5 4.5l-8.2 8.2a5 5 0 0 1-7.1-7.1l8.2-8.2"/><path d="m7.8 14.2 7.1-7.1"/></svg></button>
+    </section>
+    <section class="hallmark-component-state">
+        <div><h2>Keyboard focus</h2><p>Focus ring appears immediately</p></div>
+        <button class="attachment-picker-btn is-focus" type="button" aria-label="Add audio file"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8.5 12.5 6.1-6.1a3.2 3.2 0 0 1 4.5 4.5l-8.2 8.2a5 5 0 0 1-7.1-7.1l8.2-8.2"/><path d="m7.8 14.2 7.1-7.1"/></svg></button>
+    </section>
+    <section class="hallmark-component-state">
+        <div><h2>Pressed</h2><p>Control is being activated</p></div>
+        <button class="attachment-picker-btn is-active" type="button" aria-label="Add audio file"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8.5 12.5 6.1-6.1a3.2 3.2 0 0 1 4.5 4.5l-8.2 8.2a5 5 0 0 1-7.1-7.1l8.2-8.2"/><path d="m7.8 14.2 7.1-7.1"/></svg></button>
+    </section>
+    <section class="hallmark-component-state">
+        <div><h2>Disabled</h2><p>Upload is in progress</p></div>
+        <button class="attachment-picker-btn is-disabled" type="button" aria-label="Add audio file" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8.5 12.5 6.1-6.1a3.2 3.2 0 0 1 4.5 4.5l-8.2 8.2a5 5 0 0 1-7.1-7.1l8.2-8.2"/><path d="m7.8 14.2 7.1-7.1"/></svg></button>
+    </section>
+    <section class="hallmark-component-state">
+        <div><h2>Loading</h2><p>Transcribing audio</p></div>
+        <button class="attachment-picker-btn is-loading" type="button" aria-label="Transcribing audio" aria-busy="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8.5 12.5 6.1-6.1a3.2 3.2 0 0 1 4.5 4.5l-8.2 8.2a5 5 0 0 1-7.1-7.1l8.2-8.2"/><path d="m7.8 14.2 7.1-7.1"/></svg></button>
+    </section>
+    <section class="hallmark-component-state">
+        <div><h2>Invalid file</h2><p>Choose a supported audio format</p></div>
+        <button class="attachment-picker-btn is-error" type="button" aria-label="Audio attachment error" aria-invalid="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8.5 12.5 6.1-6.1a3.2 3.2 0 0 1 4.5 4.5l-8.2 8.2a5 5 0 0 1-7.1-7.1l8.2-8.2"/><path d="m7.8 14.2 7.1-7.1"/></svg></button>
+    </section>
+    <section class="hallmark-component-state">
+        <div><h2>Selected</h2><p>An audio attachment is ready</p></div>
+        <div class="attachment-chip attachment-chip-audio">
+            <span class="attachment-chip-kind" aria-hidden="true">Audio</span>
+            <span class="attachment-chip-details"><span class="attachment-chip-name">field-notes.m4a</span><span class="attachment-chip-size">Audio file</span></span>
+            <button class="attachment-remove" type="button" aria-label="Remove field notes audio">×</button>
+            <audio class="attachment-audio-preview" controls preload="none" aria-label="Preview selected audio"></audio>
+        </div>
+    </section>
+</main>
+</body>
+</html>

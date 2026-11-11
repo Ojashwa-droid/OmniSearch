@@ -1,0 +1,20 @@
+[
+ {
+  "mode": "redesign",
+  "depth": "full",
+  "scope": "app",
+  "theme": "brand",
+  "shape": "app screen",
+  "axes": [
+   "asymmetric editorial home desk",
+   "three-column evidence clipping grid",
+   "readable research article",
+   "persistent query composer"
+  ],
+  "imagery": "none",
+  "signature": "live source clippings and cited article answers",
+  "waived": [],
+  "prompt": "Redesign the existing OmniSearch static app screen while preserving the newsroom identity, paper and ink palette, IBM Plex Sans, red citations, search, history, source dropdown, streaming, and answer workflows.",
+  "date": "2026-11-11"
+ }
+]

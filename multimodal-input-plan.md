@@ -2,9 +2,13 @@
 
 ## Summary
 
-Add image, document, and audio inputs to the existing text research flow. Process each attachment according to its type, use Gemini to derive bounded web searches from the question and attachment evidence, retrieve real web sources, then stream a grounded answer using both the retrieved sources and the original inputs.
+Add image, document, and audio inputs to the existing text research flow. 
+Process each attachment according to its type, use Gemini to derive bounded web searches from the question 
+and attachment evidence, retrieve real web sources, then stream a grounded answer using both the retrieved
+sources and the original inputs.
 
-Keep the current text-only API working. The first version will process uploads during the request but won’t save the original files to a backend database. The suggested plan document path is `docs/multimodal-input-plan.md`.
+Keep the current text-only API working. The first version will process uploads during the request but won’t save 
+the original files to a backend database. The suggested plan document path is `docs/multimodal-input-plan.md`.
 
 ## Recommended design and data flow
 

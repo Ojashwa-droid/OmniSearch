@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/css/omnisearch.css?v=17">
+    <link rel="stylesheet" href="/css/omnisearch.css?v=22">
 </head>
 <body class="is-home">
 
@@ -23,7 +23,8 @@
         </a>
     </div>
     <div class="masthead-tools">
-        <p class="desk-status">Desk · Gemini flash-lite</p>
+        <p class="desk-status">Desk</p>
+        <p class="desk-model">Gemini flash-lite</p>
         <button id="session-sources-toggle" class="session-sources-toggle" type="button" aria-controls="session-sources-panel" aria-expanded="false" hidden>
             <span>Sources</span>
             <span id="session-sources-count" class="session-sources-count">0</span>
@@ -35,10 +36,7 @@
 <div id="chat-sidebar-backdrop" class="chat-sidebar-backdrop" hidden></div>
 <aside id="chat-sidebar" class="chat-sidebar" aria-label="Chat history" aria-hidden="true" inert>
     <div class="chat-sidebar-head">
-        <div>
-            <p class="session-sources-eyebrow">OmniSearch</p>
-            <h2>Your chats</h2>
-        </div>
+        <h2>Your chats</h2>
         <button id="chat-sidebar-close" class="session-sources-close" type="button" aria-label="Close chat history">×</button>
     </div>
     <button id="new-chat-btn" class="new-chat-btn" type="button">
@@ -52,7 +50,6 @@
 <aside id="session-sources-panel" class="session-sources-panel" aria-label="Sources in this chat" hidden>
     <div class="session-sources-panel-head">
         <div>
-            <p class="session-sources-eyebrow">Research file</p>
             <h2>Sources in this chat</h2>
             <p id="session-sources-summary" class="session-sources-summary"></p>
         </div>
@@ -63,23 +60,35 @@
 
 <main id="page">
     <section id="home" aria-label="File a question">
-        <p class="kicker">Wire desk</p>
-        <h1 class="home-title">Research the web.<br>Understand what matters.</h1>
-        <p class="home-lede">What do you want to know?</p>
-        <div class="wires" role="group" aria-label="Suggested searches">
-            <button class="wire" type="button">What is Spring AI?</button>
-            <button class="wire" type="button">How does RAG work?</button>
-            <button class="wire" type="button">Explain quantum computing</button>
-            <button class="wire" type="button">Latest AI breakthroughs 2026</button>
-            <button class="wire" type="button">What is Gemini Flash?</button>
+        <div class="home-layout">
+            <div class="home-intro">
+                <h1 class="home-title">Research the web.<br>Understand what matters.</h1>
+                <p class="home-lede">What do you want to know?</p>
+            </div>
+            <section class="home-query-index" aria-labelledby="home-index-title">
+                <h2 id="home-index-title" class="home-index-title">Wire desk</h2>
+                <div class="wires" role="group" aria-label="Suggested searches">
+                    <button class="wire" type="button">What is Spring AI?</button>
+                    <button class="wire" type="button">How does RAG work?</button>
+                    <button class="wire" type="button">Explain quantum computing</button>
+                    <button class="wire" type="button">Latest AI breakthroughs 2026</button>
+                    <button class="wire" type="button">What is Gemini Flash?</button>
+                </div>
+            </section>
         </div>
     </section>
     <div id="thread" hidden></div>
 </main>
 
 <div id="composer" role="search">
+    <div id="attachment-tray" class="attachment-tray" aria-label="Selected attachments" aria-live="polite" hidden></div>
+    <p id="attachment-notice" class="attachment-notice" role="status" hidden></p>
     <form id="search-form" novalidate>
         <label class="sr-only" for="query-input">Question</label>
+        <button type="button" id="attachment-picker-btn" class="attachment-picker-btn" title="Add images, documents or audio" aria-label="Add images, documents or audio" aria-describedby="attachment-help">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8.5 12.5 6.1-6.1a3.2 3.2 0 0 1 4.5 4.5l-8.2 8.2a5 5 0 0 1-7.1-7.1l8.2-8.2"/><path d="m7.8 14.2 7.1-7.1"/></svg>
+        </button>
+        <input id="attachment-file-input" class="sr-only" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,audio/flac,audio/mpeg,audio/mp3,audio/mp4,audio/ogg,audio/wav,audio/x-wav,audio/webm,video/mp4,video/webm,.jpg,.jpeg,.png,.webp,.heic,.heif,.flac,.mp3,.mp4,.mpeg,.mpga,.m4a,.ogg,.wav,.webm,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.md,.markdown,.html,.htm,.csv" multiple aria-label="Choose images, documents or audio">
         <textarea
                 id="query-input"
                 placeholder="Ask anything…"
@@ -87,19 +96,25 @@
                 spellcheck="true"
                 rows="1"
         ></textarea>
-        <button type="button" id="stop-btn" hidden title="Stop" aria-label="Stop generating">
-            <span class="stop-square" aria-hidden="true"></span>
-        </button>
-        <button type="submit" id="send-btn" title="Send" aria-label="Send query">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="square" aria-hidden="true">
-                <path d="M12 19V5M5 12l7-7 7 7"/>
-            </svg>
-        </button>
+        <div class="search-actions">
+            <button type="button" id="microphone-btn" class="microphone-btn" title="Start voice input" aria-label="Start voice input" aria-pressed="false" aria-describedby="attachment-help">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3m-4 0h8"/></svg>
+            </button>
+            <button type="button" id="stop-btn" hidden title="Stop" aria-label="Stop generating">
+                <span class="stop-square" aria-hidden="true"></span>
+            </button>
+            <button type="submit" id="send-btn" title="Send" aria-label="Send query">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="square" aria-hidden="true">
+                    <path d="M12 19V5M5 12l7-7 7 7"/>
+                </svg>
+            </button>
+        </div>
+        <div id="voice-waveform" class="voice-waveform" aria-hidden="true" hidden></div>
     </form>
-    <p class="composer-hint">Enter to send · Shift+Enter for a new line</p>
+    <p class="composer-hint"><span id="attachment-help">Attach files or record a voice note · up to five files</span><span>Enter to send</span><span>Shift+Enter for a new line</span></p>
 </div>
 
 <script src="/js/marked.min.js?v=1"></script>
-<script src="/js/omnisearch.js?v=15"></script>
+<script src="/js/omnisearch.js?v=22"></script>
 </body>
 </html>
