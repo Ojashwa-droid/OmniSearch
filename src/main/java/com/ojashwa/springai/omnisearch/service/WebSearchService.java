@@ -33,13 +33,14 @@ public class WebSearchService {
     }
 
     public Mono<TavilyResponse> search(String query) {
-        return search(TavilySearchRequest.builder()
+        TavilySearchRequest tavilySearchRequest = TavilySearchRequest.builder()
                 .query(query)
                 .maxResults(10)
                 .searchDepth("basic")
                 .includeAnswer(true)
                 .includeRawContent(true)
-                .build());
+                .build();
+        return search(tavilySearchRequest);
     }
 
     public Mono<TavilyResponse> search(TavilySearchRequest request) {
@@ -67,7 +68,7 @@ public class WebSearchService {
      */
     private TavilyResponse createFallbackResponse(String query) {
         TavilySearchResult mockResult = TavilySearchResult.builder()
-                .title("Simulated Search Result (Demo Mode)")
+                .title("Simulated Search Result")
                 .url("https://omnisearch.local/demo-fallback")
                 .content("Due to high network traffic, live web search is temporarily bypassed. " +
                         "This is a simulated context for the query: " + query + ". " +

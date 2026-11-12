@@ -36,11 +36,11 @@ public class OmnisearchOrchestrator {
                 .flatMapMany(searchResponse -> {
                     // 1. Build the context manually using standard Java, NO LLM REQUIRED.
                     // This takes 1 millisecond instead of 16 seconds.
-                    SearchContext context = buildContextDirectly(query, searchResponse);
+                    SearchContext context = buildContext(query, searchResponse);
 
                     String sourcesHeader = "";
                     try {
-                        if (searchResponse != null && searchResponse.getResults() != null) {
+                        if (searchResponse.getResults() != null) {
                             sourcesHeader = "<!--SOURCES:" + objectMapper.writeValueAsString(searchResponse.getResults()) + "-->\n";
                         }
                     } catch (Exception e) {
@@ -58,7 +58,7 @@ public class OmnisearchOrchestrator {
                 });
     }
 
-    private SearchContext buildContextDirectly(String query, TavilyResponse response) {
+    private SearchContext buildContext(String query, TavilyResponse response) {
         List<String> sources = response.getResults().stream()
                 .map(r -> String.format("[%s](%s)", r.getTitle(), r.getUrl()))
                 .collect(Collectors.toList());
