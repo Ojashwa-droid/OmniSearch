@@ -32,6 +32,40 @@ flowchart TD
     C -->|follow-up request| F[FollowUpQuestionsAgent: Gemini]
 ```
 
+## Response generation walkthrough
+
+The screenshots below show one complete multimodal interaction in the browser: the user submits a question with a PDF and voice note, OmniSearch displays the transcript and gathered sources, streams the answer with inline citations, and finishes with a summary and suggested follow-up questions.
+
+### 1. Submit a question and attachments
+
+The composer accepts text, documents, images, and recorded audio together. This example sends a PDF and voice note with a text prompt.
+
+![OmniSearch composer with a question, PDF, and recorded audio attached](.github/assets/1.png)
+
+### 2. Show submitted evidence and research sources
+
+Once processing begins, the UI shows the user's question, attachment names, the audio transcript, and web source cards. This makes the evidence that informed the answer visible alongside the search results.
+
+![OmniSearch showing the submitted attachments, audio transcript, and web sources](.github/assets/2.png)
+
+### 3. Stream the grounded answer
+
+The response is delivered incrementally. Inline citation markers point back to the source list, while the answer is rendered as Markdown.
+
+![OmniSearch streaming an answer with inline source citations](.github/assets/3.png)
+
+### 4. Continue through the generated response
+
+The answer can span multiple sections; the user can read through the response while the conversation composer remains available.
+
+![Continued OmniSearch response with cited research sections](.github/assets/4.png)
+
+### 5. Finish with a summary and follow-up prompts
+
+At the end of the response, a summary table and suggested questions give the user a compact recap and a path to continue the research. The browser sends a follow-up generation request after the answer completes.
+
+![OmniSearch response summary and generated follow-up questions](.github/assets/5.png)
+
 ### Main components
 
 | Component | Responsibility |
