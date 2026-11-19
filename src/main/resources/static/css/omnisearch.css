@@ -619,6 +619,10 @@ button:disabled { opacity: 0.55; cursor: not-allowed; }
 .turn-attachment { max-width: min(100%, 320px); min-height: 36px; padding: var(--space-2xs) var(--space-xs); display: flex; align-items: center; gap: var(--space-xs); border: 1px solid var(--rule); background: var(--paper-raised); }
 .turn-attachment-kind { flex: 0 0 auto; color: var(--ink-2); font-size: 12px; }
 .turn-attachment-name { overflow: hidden; color: var(--ink); font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+.turn-transcripts { width: min(100%, 720px); margin: calc(var(--space-sm) * -1) 0 var(--space-lg) auto; display: grid; gap: var(--space-xs); }
+.turn-transcript { padding: var(--space-sm) var(--space-md); border: 1px solid var(--rule); background: var(--paper-raised); }
+.turn-transcript-label { margin: 0 0 var(--space-2xs); color: var(--ink-2); font-size: 12px; font-weight: 600; }
+.turn-transcript-text { margin: 0; color: var(--ink); font-size: 14px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
 
 .hallmark-component-preview { width: min(100%, 860px); margin: 0 auto; padding: var(--space-lg); display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-md); }
 .hallmark-component-state { min-width: 0; padding: var(--space-md); display: flex; align-items: center; justify-content: space-between; gap: var(--space-md); border-bottom: 1px solid var(--rule); }
@@ -633,6 +637,7 @@ button:disabled { opacity: 0.55; cursor: not-allowed; }
   .attachment-picker-btn, .microphone-btn { width: 38px; flex-basis: 38px; }
   .turn-attachments { margin-top: calc(var(--space-xs) * -1); }
   .turn-attachment { max-width: 100%; }
+  .turn-transcripts { width: 100%; }
   .hallmark-component-preview { grid-template-columns: minmax(0, 1fr); padding: var(--space-sm); }
   .hallmark-component-state { padding-inline: 0; }
 }

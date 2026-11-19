@@ -17,4 +17,7 @@ public class SearchContext {
     private List<String> relevantSources;
     private String aggregatedContent;
     private int sourceCount;
+    private List<String> generatedQueries;
+    private List<String> attachmentNames;
+    private String attachmentContext;
 }
