@@ -12,16 +12,30 @@ the original files to a backend database. The suggested plan document path is `d
 
 ## Recommended design and data flow
 
-1. **Accept multipart uploads.** Add `POST /api/omnisearch/conversation/stream/multimodal` with `multipart/form-data` fields `query`, `conversationId`, and repeated `attachments`. Keep the current JSON streaming endpoint unchanged for existing text-only clients. The frontend uses the new endpoint when a chat includes attachments.
+1. **Accept multipart uploads.** Add `POST /api/omnisearch/conversation/stream/multimodal` with `multipart/form-data` 
+   fields `query`, `conversationId`, and repeated `attachments`. 
+   Keep the current JSON streaming endpoint unchanged for existing text-only clients. 
+   The frontend uses the new endpoint when a chat includes attachments.
 
-2. **Validate and classify before processing.** Allow up to five files per request and use configurable limits, starting at 20 MiB per file and 40 MiB per request. Detect the actual MIME type from the bytes rather than trusting the filename or browser-provided content type. Initially allow common images (JPEG, PNG, WebP, HEIC/HEIF), audio formats supported by Groq Whisper, and common documents (PDF, DOC/DOCX, PPT/PPTX, XLS/XLSX, TXT, Markdown, HTML, CSV). Reject unsupported or malformed files with a filename-specific error. Spring Boot multipart limits should be configured explicitly; its defaults are 1 MiB per file and 10 MiB per request. [Spring Boot multipart configuration](https://docs.spring.io/spring-boot/3.4/how-to/spring-mvc.html)
+2. **Validate and classify before processing.** Allow up to five files per request and use configurable limits, 
+   starting at 20 MiB per file and 40 MiB per request. Detect the actual MIME type from the bytes rather than 
+   trusting the filename or browser-provided content type. 
+   Initially allow common images (JPEG, PNG, WebP, HEIC/HEIF), 
+   audio formats supported by Groq Whisper, and common documents (PDF, DOC/DOCX, PPT/PPTX, XLS/XLSX, TXT, Markdown, HTML, CSV). 
+   Reject unsupported or malformed files with a filename-specific error. Spring Boot multipart limits should be configured explicitly; 
+   its defaults are 1 MiB per file and 10 MiB per request. [Spring Boot multipart configuration](https://docs.spring.io/spring-boot/3.4/how-to/spring-mvc.html)
 
 3. **Create normalized attachment context.**
     - **Images:** Keep the original image bytes for Gemini vision. Don’t reduce the image to a caption alone.
-    - **Documents:** Use the project’s existing `spring-ai-tika-document-reader` dependency to extract text and metadata. For PDFs within the configured Gemini media budget, send both the Tika extraction and the PDF itself so the model can also inspect charts, tables, and layout. Tika extracts text across many formats; it does not guarantee faithful visual or table reconstruction. [Spring AI TikaDocumentReader](https://docs.spring.io/spring-ai/docs/current/api/org/springframework/ai/reader/tika/TikaDocumentReader.html), [Gemini document understanding](https://ai.google.dev/gemini-api/docs/document-processing?authuser=4&hl=en)
+    - **Documents:** Use the project’s existing `spring-ai-tika-document-reader` dependency to extract text and metadata. 
+                     For PDFs within the configured Gemini media budget,
+                     send both the Tika extraction and the PDF itself so the model can also inspect charts, tables, and layout. 
+                     Tika extracts text across many formats; it does not guarantee faithful visual or table reconstruction. [Spring AI TikaDocumentReader](https://docs.spring.io/spring-ai/docs/current/api/org/springframework/ai/reader/tika/TikaDocumentReader.html), [Gemini document understanding](https://ai.google.dev/gemini-api/docs/document-processing?authuser=4&hl=en)
     - **Audio:** Send the audio file to Groq’s OpenAI-compatible `/audio/transcriptions` endpoint using `whisper-large-v3-turbo`. Use the returned transcript as text evidence; keep timestamps if returned, but don’t require diarization in v1. Configure the application audio limit to 20 MiB, below Groq’s documented 25 MB free-tier upload limit, and make it adjustable for the account tier. [Groq speech-to-text documentation](https://console.groq.com/docs/speech-to-text)
 
-   Keep extracted text bounded: start with a 40,000-character limit per document and 100,000 characters across all attachments. Run Tika parsing on a bounded worker pool rather than the WebFlux event loop, and apply parser time limits. Tika documents configurable timeout and robustness controls. [Apache Tika timeout guidance](https://tika.apache.org/docs/4.2.x/pipes/timeouts.html)
+   Keep extracted text bounded: start with a 40,000-character limit per document and 100,000 characters across all attachments. 
+   Run Tika parsing on a bounded worker pool rather than the WebFlux event loop, and apply parser time limits. 
+   Tika documents configurable timeout and robustness controls. [Apache Tika timeout guidance](https://tika.apache.org/docs/4.2.x/pipes/timeouts.html)
 
 4. **Plan searches, then retrieve sources.** Add a `SearchQueryPlanner` that receives the original question, document text, audio transcript, and image/PDF media. It returns a structured plan with one to three concise web queries. Validate the result before sending it to Tavily. Run those searches with bounded concurrency, deduplicate results by canonical URL, rank them, and cap the combined retrieved context. Gemini 3.5 Flash-Lite is documented as accepting text, image, video, audio, and PDF inputs; Spring AI exposes multimodal inputs through `UserMessage` media. [Gemini model capabilities](https://ai.google.dev/gemini-api/docs/models/gemini-3.5-flash-lite?authuser=4), [Spring AI multimodality](https://docs.spring.io/spring-ai/reference/api/multimodality.html)
 

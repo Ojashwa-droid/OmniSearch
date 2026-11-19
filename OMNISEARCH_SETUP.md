@@ -66,18 +66,17 @@ CREATE TABLE search_history (
 
 ### 4. Configure Application Properties
 
-Update `src/main/resources/application.properties`:
+Set provider credentials in your shell or deployment environment. Do not put keys in `application.properties`:
 
-```properties
-# Omnisearch Configuration
-omnisearch.tavily.api-key=YOUR_TAVILY_API_KEY_HERE
-omnisearch.tavily.api-url=https://api.tavily.com/search
-
-# Supabase Configuration
-supabase.url=https://YOUR_PROJECT.supabase.co
-supabase.key=YOUR_SUPABASE_ANON_KEY
-supabase.jdbc.url=jdbc:postgresql://YOUR_PROJECT.postgres.supabase.co:5432/postgres
+```powershell
+$env:GEMINI_API_KEY = "YOUR_GEMINI_API_KEY"
+$env:TAVILY_API_KEY = "YOUR_TAVILY_API_KEY"
+$env:GROQ_API_KEY = "YOUR_GROQ_API_KEY"
 ```
+
+`GROQ_API_KEY` is needed when submitting audio. Upload limits and provider endpoint defaults are configured in `application.properties`.
+
+If you later enable the optional Supabase integration, provide its credentials through deployment secrets as well.
 
 ### 5. Build and Run
 

@@ -3,6 +3,7 @@ package com.ojashwa.springai.omnisearch.controller;
 import com.ojashwa.springai.omnisearch.agent.FollowUpQuestionsAgent;
 import com.ojashwa.springai.omnisearch.controller.dtos.FollowUpRequest;
 import com.ojashwa.springai.omnisearch.controller.dtos.FollowUpResponse;
+import com.ojashwa.springai.omnisearch.controller.dtos.MultimodalSearchResponse;
 import com.ojashwa.springai.omnisearch.controller.dtos.SearchRequest;
 import com.ojashwa.springai.omnisearch.service.OmnisearchOrchestrator;
 import lombok.RequiredArgsConstructor;
@@ -11,9 +12,11 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
-import org.springframework.web.bind.annotation.CrossOrigin;
+
+import java.util.List;
 
 @Slf4j
 @RestController
@@ -25,18 +28,23 @@ public class OmnisearchController {
     private final OmnisearchOrchestrator orchestrator;
     private final FollowUpQuestionsAgent followUpAgent;
 
-    @PostMapping(value = "/conversation", produces = MediaType.TEXT_PLAIN_VALUE)
+    @PostMapping(value = "/conversation",
+            produces = MediaType.TEXT_PLAIN_VALUE
+    )
     public Flux<String> search(@RequestBody SearchRequest request) {
-        log.info("Received search request {} with conversationId as: {}", request.getQuery(),
-                request.getConversationId());
+        log.info("Text search request received: conversationId={}, queryCharacters={}",
+                request.getConversationId(), request.getQuery() == null ? 0 : request.getQuery().length());
         return orchestrator.searchWithStreaming(request.getQuery(), request.getConversationId());
     }
 
     @PostMapping("/followups")
     public ResponseEntity<FollowUpResponse> getFollowUps(@RequestBody FollowUpRequest request) {
+        log.info("Follow-up request received: queryCharacters={}, answerCharacters={}",
+                request.originalQuery() == null ? 0 : request.originalQuery().length(),
+                request.answer() == null ? 0 : request.answer().length());
         FollowUpResponse followUpResponse = followUpAgent.generateFollowUps(request.originalQuery(), request.answer());
 
-        log.info("Generated follow up questions: {}", followUpResponse.followUpQuestions());
+        log.info("Follow-up generation completed: questionCount={}", followUpResponse.followUpQuestions().size());
 
         return ResponseEntity.ok(followUpResponse);
     }
@@ -46,16 +54,47 @@ public class OmnisearchController {
         return Mono.just("Omnisearch API is running");
     }
 
-    @PostMapping(value = "/conversation/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    @PostMapping(value = "/conversation/stream",
+            produces = MediaType.TEXT_EVENT_STREAM_VALUE
+    )
     public Flux<ServerSentEvent<String>> searchStream(@RequestBody SearchRequest request) {
-        log.info("Received streaming search request: {}", request.getQuery());
+        log.info("Streaming text search request received: conversationId={}, queryCharacters={}",
+                request.getConversationId(), request.getQuery() == null ? 0 : request.getQuery().length());
 
         return orchestrator.searchWithStreaming(request.getQuery(), request.getConversationId())
                 .map(chunk -> ServerSentEvent.<String>builder()
                         .data(chunk)
                         .build())
                 .doOnComplete(() -> {
-                    log.info("Stream completed for query: {}", request.getQuery());
+                    log.info("Text search SSE stream completed: conversationId={}", request.getConversationId());
                 });
     }
+
+    @PostMapping(value = "/conversation/stream/multimodal",
+            consumes = MediaType.MULTIPART_FORM_DATA_VALUE,
+            produces = MediaType.TEXT_EVENT_STREAM_VALUE
+    )
+    public Flux<ServerSentEvent<String>> searchStreamMultiModal(
+            @RequestParam(required = false) String query,
+            @RequestParam(required = false) String conversationId,
+            @RequestPart("attachments") List<MultipartFile> attachments) {
+        log.info("Multimodal search request received: conversationId={}, queryCharacters={}, attachmentCount={}",
+                conversationId, query == null ? 0 : query.length(), attachments.size());
+
+        return orchestrator.searchMultimodalWithStreaming(query, conversationId, attachments)
+                .map(chunk -> ServerSentEvent.<String>builder().data(chunk).build());
+    }
+
+    @PostMapping(value = "/conversation/multimodal",
+            consumes = MediaType.MULTIPART_FORM_DATA_VALUE,
+            produces = MediaType.APPLICATION_JSON_VALUE)
+    public Mono<MultimodalSearchResponse> searchMultiModalOnce(
+            @RequestParam(required = false) String query,
+            @RequestParam(required = false) String conversationId,
+            @RequestPart("attachments") List<MultipartFile> attachments) {
+        log.info("Non-streaming multimodal request received: conversationId={}, queryCharacters={}, attachmentCount={}",
+                conversationId, query == null ? 0 : query.length(), attachments.size());
+        return orchestrator.searchMultimodalOnce(query, conversationId, attachments);
+    }
+
 }

@@ -16,7 +16,7 @@ public class TavilySearchResult {
     private String title;
     private String url;
     private String content;
-    private int score;
+    private double score;
     @JsonProperty("published_date")
     private String publishedDate;
 }

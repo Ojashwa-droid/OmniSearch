@@ -159,7 +159,18 @@ function normaliseChatRecord(chat) {
             followUps: Array.isArray(turn?.followUps) ? turn.followUps.map(String) : [],
             attachments: Array.isArray(turn?.attachments) ? turn.attachments
                 .filter((file) => file && ['image', 'document', 'audio'].includes(file.kind))
-                .map((file) => ({ name: String(file.name || 'Attachment').slice(0, 240), kind: file.kind, mediaType: String(file.mediaType || ''), size: Math.max(0, Number(file.size) || 0) })) : []
+                .map((file) => {
+                    const normalized = {
+                        name: String(file.name || 'Attachment').slice(0, 240),
+                        kind: file.kind,
+                        mediaType: String(file.mediaType || ''),
+                        size: Math.max(0, Number(file.size) || 0)
+                    };
+                    if (file.kind === 'audio' && typeof file.transcript === 'string') {
+                        normalized.transcript = file.transcript.slice(0, 100000);
+                    }
+                    return normalized;
+                }) : []
         }))
     };
 }
@@ -962,6 +973,18 @@ function extractSourcesHeader(text) {
     }
 }
 
+function extractAttachmentHeader(text) {
+    const match = text.match(/<!--ATTACHMENTS64:([A-Za-z0-9+/=]*)-->/);
+    if (!match) return null;
+    try {
+        const binary = atob(match[1]);
+        const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+        return { attachments: JSON.parse(new TextDecoder().decode(bytes)), comment: match[0] };
+    } catch {
+        return null;
+    }
+}
+
 function setStreaming(on) {
     isStreaming = on;
     sendBtn.disabled = on;
@@ -1022,6 +1045,30 @@ function renderTurnAttachments(turn, attachments) {
         list.appendChild(item);
     });
     turn.appendChild(list);
+}
+
+function renderTurnTranscripts(turn, attachments) {
+    turn.querySelector('.turn-transcripts')?.remove();
+    const transcripts = (attachments || []).filter((attachment) => attachment.kind === 'audio' && typeof attachment.transcript === 'string');
+    if (!transcripts.length) return;
+    const group = document.createElement('section');
+    group.className = 'turn-transcripts';
+    group.setAttribute('aria-label', 'Audio transcription');
+    transcripts.forEach((attachment) => {
+        const item = document.createElement('div');
+        item.className = 'turn-transcript';
+        const label = document.createElement('p');
+        label.className = 'turn-transcript-label';
+        label.textContent = `Transcript · ${attachment.name || 'Audio'}`;
+        const text = document.createElement('p');
+        text.className = 'turn-transcript-text';
+        text.textContent = attachment.transcript.trim() || 'No speech was detected in this audio.';
+        item.append(label, text);
+        group.appendChild(item);
+    });
+    const clippings = turn.querySelector('.clippings');
+    if (clippings) turn.insertBefore(group, clippings);
+    else turn.appendChild(group);
 }
 
 function renderFollowUps(slot, questions) {
@@ -1102,6 +1149,26 @@ function processPayload(payload, state) {
     if (payload === null) return;
     state.rawFull += payload;
 
+    if (!state.attachmentsAdded) {
+        const attachmentHeader = extractAttachmentHeader(state.rawFull);
+        if (attachmentHeader) {
+            state.attachmentsAdded = true;
+            attachmentHeader.attachments.forEach((metadata) => {
+                const existing = state.turnRecord.attachments.find((item) => item.name === metadata.filename && item.kind === metadata.kind);
+                if (existing) {
+                    existing.extractedText = metadata.extractedText || '';
+                    if (metadata.kind === 'audio') existing.transcript = metadata.extractedText || '';
+                }
+            });
+            renderTurnTranscripts(state.turn, state.turnRecord.attachments);
+            if (state.turnRecord.attachments.some((item) => item.kind === 'audio' && typeof item.transcript === 'string')) {
+                state.searching.lastChild.textContent = ' Audio transcribed · searching the wire…';
+            }
+            saveActiveChatSoon();
+            state.rawFull = state.rawFull.replace(attachmentHeader.comment, '');
+        }
+    }
+
     if (!state.sourcesAdded) {
         const header = extractSourcesHeader(state.rawFull);
         if (header) {
@@ -1113,8 +1180,9 @@ function processPayload(payload, state) {
     }
 
     // Do not briefly show the SOURCES metadata as article text while its JSON is arriving.
-    if (!state.sourcesAdded && state.rawFull.startsWith('<!--SOURCES:')) return;
-    state.rawAnswer = state.rawFull.replace(/<!--SOURCES:[\s\S]*?-->/g, '').trimStart();
+    if ((!state.attachmentsAdded && state.rawFull.startsWith('<!--ATTACHMENTS64:'))
+        || (!state.sourcesAdded && state.rawFull.startsWith('<!--SOURCES:'))) return;
+    state.rawAnswer = state.rawFull.replace(/<!--(?:SOURCES:[\s\S]*?|ATTACHMENTS64:[A-Za-z0-9+/=]*)-->/g, '').trimStart();
     state.turnRecord.answerMarkdown = state.rawAnswer;
     if (state.turnRecord.sources.length === 0) state.turnRecord.status = 'streaming';
     activeChat.updatedAt = Date.now();
@@ -1163,6 +1231,7 @@ function createTurnView(record) {
     headline.textContent = record.query || (record.attachments?.length ? 'Review these attachments' : '');
     turn.appendChild(headline);
     renderTurnAttachments(turn, record.attachments);
+    renderTurnTranscripts(turn, record.attachments);
 
     const clippings = document.createElement('div');
     clippings.className = 'clippings';
@@ -1367,7 +1436,7 @@ async function submitQuery() {
     thread.appendChild(turn);
     turn.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
-    const state = { rawFull: '', rawAnswer: '', sourcesAdded: false, clippings, answer, searching, query, turnNumber, turnRecord };
+    const state = { rawFull: '', rawAnswer: '', sourcesAdded: false, attachmentsAdded: false, turn, clippings, answer, searching, query, turnNumber, turnRecord };
     abortController = new AbortController();
     let stopped = false;
     let requestError = false;
@@ -1396,7 +1465,25 @@ async function submitQuery() {
                 throw new Error('The server does not have the multimodal upload endpoint yet. Your selected files are back in the composer; text-only search is still available.');
             }
             if (response.status === 413) throw new Error('The server rejected this upload because it is too large. Reduce the file sizes and try again.');
-            throw new Error(`Search failed (${response.status}). Please try again.`);
+            let serverMessage = '';
+            try {
+                const errorBody = await response.text();
+                try {
+                    const parsedError = JSON.parse(errorBody);
+                    serverMessage = parsedError.message || '';
+                    if (!serverMessage && parsedError.status && parsedError.error) {
+                        serverMessage = `${parsedError.error} (${parsedError.status})`;
+                    }
+                } catch (_) {
+                    const plainMessage = errorBody.replace(/^data:\s?/gm, '').trim();
+                    if (plainMessage.length > 0 && plainMessage.length <= 500 && !/^\s*</.test(plainMessage)) {
+                        serverMessage = plainMessage;
+                    }
+                }
+            } catch (_) {
+                // Keep the generic status message when the server response is not JSON.
+            }
+            throw new Error(serverMessage || `Search failed (${response.status}). Please try again.`);
         }
         await readEventStream(response, state);
     } catch (error) {
@@ -1426,7 +1513,7 @@ async function submitQuery() {
                 previewUrl: attachmentMetadata[index].kind === 'document' ? '' : URL.createObjectURL(file)
             }));
             renderAttachmentTray();
-            setAttachmentNotice('The upload did not reach the server. Your files are ready to retry.', 'error');
+            setAttachmentNotice('The server returned an error while processing this upload. Your files are ready to retry.', 'error');
         }
     }
 
@@ -1466,7 +1553,17 @@ async function submitQuery() {
     addCopyButton(state.rawAnswer, actions);
     activeChat.updatedAt = Date.now();
     await persistActiveChatNow();
-    if (!stopped && query) loadFollowUps(query, state.rawAnswer, followupSlot, turnRecord, chatForTurn);
+    const attachmentContexts = turnRecord.attachments.map((attachment) => {
+        const label = attachment.kind === 'audio' ? 'Audio' : attachment.kind === 'image' ? 'Image' : 'Document';
+        const text = attachment.kind === 'audio' ? attachment.transcript : attachment.extractedText;
+        const excerpt = typeof text === 'string' ? text.trim().slice(0, 1600) : '';
+        return `${label} attachment: ${attachment.name || 'unnamed file'}${excerpt ? `\nExtracted content: ${excerpt}` : ''}`;
+    });
+    const followUpContext = [query, ...attachmentContexts].filter(Boolean).join('\n\n').slice(0, 6000);
+    const hasInput = Boolean(query || turnRecord.attachments.length);
+    if (!stopped && !requestError && hasInput) {
+        loadFollowUps(followUpContext || 'The user provided an attachment.', state.rawAnswer, followupSlot, turnRecord, chatForTurn);
+    }
 }
 
 input.addEventListener('input', () => {
