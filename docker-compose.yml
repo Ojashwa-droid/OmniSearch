@@ -1,0 +1,27 @@
+services:
+  omnisearch:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: omnisearch:local
+    container_name: omnisearch
+    init: true
+    restart: unless-stopped
+    environment:
+      GEMINI_API_KEY: "${GEMINI_API_KEY:?Set GEMINI_API_KEY in .env}"
+      TAVILY_API_KEY: "${TAVILY_API_KEY:?Set TAVILY_API_KEY in .env}"
+      GROQ_API_KEY: "${GROQ_API_KEY:-}"
+      SERVER_PORT: "8080"
+      JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=${JAVA_MAX_RAM_PERCENTAGE:-70} -XX:+UseG1GC -XX:+ExitOnOutOfMemoryError"
+      LOGGING_LEVEL_COM_OJASHWA_SPRINGAI: "${APP_LOG_LEVEL:-INFO}"
+    ports:
+      - "${APP_BIND_ADDRESS:-127.0.0.1}:${APP_PORT:-8080}:8080"
+    mem_limit: "${CONTAINER_MEMORY_LIMIT:-1280m}"
+    cpus: "${CONTAINER_CPU_LIMIT:-1.5}"
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

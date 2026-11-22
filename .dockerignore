@@ -1,0 +1,15 @@
+.git
+.github
+.idea
+.vscode
+.env
+.env.*
+!.env.example
+target
+build
+output
+design
+*.docx
+*.pdf
+*.md
+!README.md

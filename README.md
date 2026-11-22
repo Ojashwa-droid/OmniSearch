@@ -132,6 +132,43 @@ The application serves the browser UI and API from the same Spring Boot process.
 ./mvnw.cmd clean package
 ```
 
+## Deploy on an Azure Linux VM with Docker
+
+The Docker image builds the app with Java 21, then runs only the packaged app on a Java 21 runtime image. The container runs as a non-root user, has a health check, and uses bounded CPU and memory defaults that can be adjusted in `.env`.
+
+From the repository directory on the VM:
+
+```bash
+cp .env.example .env
+nano .env
+```
+
+Set `GEMINI_API_KEY` and `TAVILY_API_KEY` in `.env`. Set `GROQ_API_KEY` if you want audio transcription. Then build and start the service:
+
+```bash
+docker compose up --build -d
+docker compose ps
+docker compose logs -f omnisearch
+```
+
+Check the health endpoint on the VM:
+
+```bash
+curl http://127.0.0.1:8080/api/omnisearch/health
+```
+
+The default Compose binding keeps port 8080 reachable only from the VM. To open the app from your computer, create an SSH tunnel:
+
+```bash
+ssh -L 8080:127.0.0.1:8080 <vm-user>@<vm-public-ip>
+```
+
+Then open `http://localhost:8080/` on your computer. The app has no authentication or built-in rate limiting, so keep port 8080 private. For public access, put it behind an HTTPS reverse proxy and configure access controls before opening web traffic in the Azure Network Security Group. Keep the SSH rule limited to your own IP.
+
+Adjust `CONTAINER_MEMORY_LIMIT`, `CONTAINER_CPU_LIMIT`, and `JAVA_MAX_RAM_PERCENTAGE` in `.env` to match the VM size. The defaults are starting points; the app's conversation memory is in process and will reset when the container restarts.
+
+To deploy a later code change, run `docker compose up --build -d` again. To stop the service, run `docker compose down`.
+
 ## HTTP API
 
 Base path: `/api/omnisearch`. JSON request DTOs use `query` and `conversationId` fields.
