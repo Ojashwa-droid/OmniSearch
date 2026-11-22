@@ -1,5 +1,7 @@
 # Omnisearch - Perplexity AI Clone Setup Guide
 
+> **Legacy setup notes:** This guide predates the current implementation and mentions Ollama, Supabase, and endpoints that are not part of the active app. For current setup and Azure Docker deployment steps, follow the Requirements and Deploy sections in [README.md](README.md).
+
 This project implements a Perplexity AI backend clone using Spring AI, featuring web search, context engineering, streaming responses, and parallel follow-up question generation.
 
 ## Architecture Overview
